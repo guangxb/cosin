@@ -31,7 +31,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
-import org.springframework.util.FileCopyUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,7 +38,6 @@ import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,6 +73,8 @@ public class WebIMController extends Handler {
     public ModelAndView index(ModelMap map, HttpServletRequest request, @Valid String snsid) {
 
         CousultInvite coultInvite = invite.findBySnsaccountidAndOrgi(snsid, super.getOrgi(request));
+        logger.info("[index] snsaccount Id {}, AiFirst {}", coultInvite.getSnsaccountid(), coultInvite.isAifirst());
+
         if (coultInvite != null) {
             map.addAttribute("inviteData", coultInvite);
             map.addAttribute("skillList", getOrgans(request));
@@ -90,7 +90,7 @@ public class WebIMController extends Handler {
     @RequestMapping("/save")
     @Menu(type = "admin", subtype = "app", admin = true)
     public ModelAndView save(HttpServletRequest request, @Valid CousultInvite inviteData, @RequestParam(value = "webimlogo", required = false) MultipartFile webimlogo, @RequestParam(value = "agentheadimg", required = false) MultipartFile agentheadimg) throws IOException {
-        if (!StringUtils.isBlank(inviteData.getSnsaccountid())) {
+        if (StringUtils.isNotBlank(inviteData.getSnsaccountid())) {
             CousultInvite tempData = invite.findBySnsaccountidAndOrgi(inviteData.getSnsaccountid(), super.getOrgi(request));
             if (tempData != null) {
                 tempData.setConsult_vsitorbtn_model(inviteData.getConsult_vsitorbtn_model());
@@ -99,30 +99,20 @@ public class WebIMController extends Handler {
                 tempData.setConsult_vsitorbtn_content(inviteData.getConsult_vsitorbtn_content());
                 tempData.setConsult_vsitorbtn_display(inviteData.getConsult_vsitorbtn_display());
                 tempData.setConsult_dialog_color(inviteData.getConsult_dialog_color());
-
                 inviteData = tempData;
             }
         } else {
             inviteData.setSnsaccountid(super.getUser(request).getId());
         }
         inviteData.setOrgi(super.getOrgi(request));
+        // 网页品牌标识
         if (webimlogo != null && webimlogo.getOriginalFilename().lastIndexOf(".") > 0) {
-            File logoDir = new File(path, "logo");
-            if (!logoDir.exists()) {
-                logoDir.mkdirs();
-            }
-            String fileName = "logo/" + inviteData.getId() + webimlogo.getOriginalFilename().substring(webimlogo.getOriginalFilename().lastIndexOf("."));
-            FileCopyUtils.copy(webimlogo.getBytes(), new File(path, fileName));
-            inviteData.setConsult_dialog_logo(fileName);
+            inviteData.setConsult_dialog_logo(super.saveImageFileWithMultipart(webimlogo));
         }
+
+        // 网页坐席头像
         if (agentheadimg != null && agentheadimg.getOriginalFilename().lastIndexOf(".") > 0) {
-            File headimgDir = new File(path, "headimg");
-            if (!headimgDir.exists()) {
-                headimgDir.mkdirs();
-            }
-            String fileName = "headimg/" + inviteData.getId() + agentheadimg.getOriginalFilename().substring(agentheadimg.getOriginalFilename().lastIndexOf("."));
-            FileCopyUtils.copy(agentheadimg.getBytes(), new File(path, fileName));
-            inviteData.setConsult_dialog_headimg(fileName);
+            inviteData.setConsult_dialog_headimg(super.saveImageFileWithMultipart(agentheadimg));
         }
         invite.save(inviteData);
         CacheHelper.getSystemCacheBean().put(inviteData.getSnsaccountid(), inviteData, inviteData.getOrgi());
@@ -147,7 +137,7 @@ public class WebIMController extends Handler {
     @Menu(type = "admin", subtype = "profile", admin = true)
     public ModelAndView saveprofile(HttpServletRequest request, @Valid CousultInvite inviteData, @RequestParam(value = "dialogad", required = false) MultipartFile dialogad) throws IOException {
         CousultInvite tempInviteData;
-        if (inviteData != null && !StringUtils.isBlank(inviteData.getId())) {
+        if (inviteData != null && StringUtils.isNotBlank(inviteData.getId())) {
             tempInviteData = invite.findOne(inviteData.getId());
             if (tempInviteData != null) {
                 tempInviteData.setDialog_name(inviteData.getDialog_name());
@@ -199,14 +189,8 @@ public class WebIMController extends Handler {
 
                 tempInviteData.setCtrlenter(inviteData.isCtrlenter());
 
-                if (dialogad != null && !StringUtils.isBlank(dialogad.getName()) && dialogad.getBytes() != null && dialogad.getBytes().length > 0) {
-                    String fileName = "ad/" + inviteData.getId() + dialogad.getOriginalFilename().substring(dialogad.getOriginalFilename().lastIndexOf("."));
-                    File file = new File(path, fileName);
-                    if (!file.getParentFile().exists()) {
-                        file.getParentFile().mkdirs();
-                    }
-                    FileCopyUtils.copy(dialogad.getBytes(), file);
-                    tempInviteData.setDialog_ad(fileName);
+                if (dialogad != null && StringUtils.isNotBlank(dialogad.getName()) && dialogad.getBytes() != null && dialogad.getBytes().length > 0) {
+                    tempInviteData.setDialog_ad(super.saveImageFileWithMultipart(dialogad));
                 }
                 invite.save(tempInviteData);
                 inviteData = tempInviteData;
@@ -234,7 +218,7 @@ public class WebIMController extends Handler {
     @Menu(type = "admin", subtype = "profile", admin = true)
     public ModelAndView saveinvote(HttpServletRequest request, @Valid CousultInvite inviteData, @RequestParam(value = "invotebg", required = false) MultipartFile invotebg) throws IOException {
         CousultInvite tempInviteData;
-        if (inviteData != null && !StringUtils.isBlank(inviteData.getId())) {
+        if (inviteData != null && StringUtils.isNotBlank(inviteData.getId())) {
             tempInviteData = invite.findOne(inviteData.getId());
             if (tempInviteData != null) {
                 tempInviteData.setConsult_invite_enable(inviteData.isConsult_invite_enable());
@@ -245,14 +229,8 @@ public class WebIMController extends Handler {
 
                 tempInviteData.setConsult_invite_color(inviteData.getConsult_invite_color());
 
-                if (invotebg != null && !StringUtils.isBlank(invotebg.getName()) && invotebg.getBytes() != null && invotebg.getBytes().length > 0) {
-                    String fileName = "invote/" + inviteData.getId() + invotebg.getOriginalFilename().substring(invotebg.getOriginalFilename().lastIndexOf("."));
-                    File file = new File(path, fileName);
-                    if (!file.getParentFile().exists()) {
-                        file.getParentFile().mkdirs();
-                    }
-                    FileCopyUtils.copy(invotebg.getBytes(), file);
-                    tempInviteData.setConsult_invite_bg(fileName);
+                if (invotebg != null && StringUtils.isNotBlank(invotebg.getName()) && invotebg.getBytes() != null && invotebg.getBytes().length > 0) {
+                    tempInviteData.setConsult_invite_bg(super.saveImageFileWithMultipart(invotebg));
                 }
                 invite.save(tempInviteData);
                 inviteData = tempInviteData;
@@ -291,7 +269,6 @@ public class WebIMController extends Handler {
      * 获取当前产品下人员信息
      *
      * @param request
-     * @param q
      * @return
      */
     private List<User> getUsers(HttpServletRequest request) {
